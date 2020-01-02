@@ -1,5 +1,7 @@
 import os
 import nltk
+import glob
+import json
 from tqdm import tqdm
 
 dm_single_close_quote = '\u2019' # unicode
@@ -9,10 +11,14 @@ pjoin = os.path.join
 
 def create_nyt_story_file(articles_file, abstracts_file, save_dir, url_save_file, use_nltk = False):
     f = open(articles_file).read().strip()
-    f = f.replace("\n\n", "\n<unknown>\n").split("\n")
+    f = f.replace("\n\n", "\n<unknown>\n")
+    f = f.split("\n")
 
     a = open(abstracts_file).read().strip()
-    a = a.replace("\n\n", "\n<unknown>\n").split("\n")
+    a = a.replace("\n\n", "\n<unknown>\n")
+    a = a.replace("<t>", " ")
+    a = a.replace("</t>", " ")
+    a = a.split("\n")
 
     url_file = open(url_save_file, "w")
 
@@ -21,6 +27,7 @@ def create_nyt_story_file(articles_file, abstracts_file, save_dir, url_save_file
         try:
             f[i] = f[i].decode("utf-8")
             a[i] = a[i].decode("utf-8")
+            print(a[i])
         except:
             pass
         art_sent = nltk.sent_tokenize(f[i])
@@ -44,16 +51,34 @@ def convert_nyt_to_story(nyt_file, abstracts_file, save_dir, url_file):
 
     create_nyt_story_file(nyt_file, abstracts_file, save_dir, url_file)
 
-if __name__ == '__main__':
-    import argparse
-    args = argparse.ArgumentParser()
-    args.add_argument("--dataset", type=str, required=True)
-    # args.add_argument("--articles_file", type=str, required = True)
-    # args.add_argument("--abstracts_file", type=str, required=True)
-    # args.add_argument("--output_dir", type=str, required=True )
-    args.add_argument("--dataset_types", nargs='+', type=str, required=True ) #test, train or valid, all
-    opts                = args.parse_args()
+def create_individual_processed_files(dataset, dataset_types):
+    for dataset_type in dataset_types:
+        cnt = 0
+        save_dir = pjoin("../Data/cnndm/Processed/", dataset_type)
+        if not os.path.exists( save_dir ):
+            os.mkdir(save_dir)
 
+        finished_files_dir = pjoin( "../Data",
+                                    dataset,
+                                    "Processed/finished_files")
+
+        file_list = glob.glob(pjoin(finished_files_dir,
+                                    "mid.%s.[0-9]*.json" % dataset_type ))
+        file_list = sorted(file_list)
+        print(file_list)
+        for fname in tqdm(file_list):
+            f = open(fname)
+            json_files = json.load(f)
+            f.close()
+
+            for data in json_files:
+                with open(pjoin(save_dir, "%d.json"%cnt), "w") as save_file:
+                    json.dump(data, save_file)
+                    save_file.close()
+                cnt += 1
+
+
+def preprocess(opts):
     dataset             = opts.dataset
     output_dir          = pjoin("../Data", dataset, "Processed")
     output_dir          = os.path.abspath(output_dir)
@@ -103,3 +128,17 @@ if __name__ == '__main__':
                     "-dataset", dataset_type
                     ]
         os.system("  ".join(cmd))
+
+    create_individual_processed_files(opts.dataset, opts.dataset_types)
+
+if __name__ == '__main__':
+    import argparse
+    args = argparse.ArgumentParser()
+    args.add_argument("--dataset", type=str, required=True)
+    # args.add_argument("--articles_file", type=str, required = True)
+    # args.add_argument("--abstracts_file", type=str, required=True)
+    # args.add_argument("--output_dir", type=str, required=True )
+    args.add_argument("--dataset_types", nargs='+', type=str, required=True ) #test, train or valid, all
+    opts                = args.parse_args()
+
+    preprocess(opts)
